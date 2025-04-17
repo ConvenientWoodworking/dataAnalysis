@@ -78,7 +78,7 @@ if st.sidebar.button("Load Data"):
 
     processed = []
     for dev, df in device_dfs.items():
-        tmp = df.set_index('Timestamp').reindex(master_idx)
+        tmp = df.set_index('Timestamp').reindex(master_idx, method='nearest', tolerance=pd.Timedelta(minutes=30))
         filled_temp, flag_temp = fill_and_flag(tmp['Temp_F'])
         filled_rh, flag_rh = fill_and_flag(tmp['RH'])
         tmp['Temp_F'] = filled_temp
