@@ -6,18 +6,11 @@ from datetime import datetime
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Image, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
+import altair as alt
 import streamlit as st
 
 # --- Helper functions ---
 def load_and_clean_csv(path):
-    """
-    Load a CSV file, rename columns, parse timestamps, and tag with device ID.
-    """
     fn = os.path.basename(path)
     match = re.match(r"(AS\d+)_export_.*\.csv", fn)
     device = match.group(1) if match else "Unknown"
@@ -34,20 +27,22 @@ def load_and_clean_csv(path):
 
 
 def find_contiguous_nans(mask):
-    gaps = []
-    start = None
-    for i, val in enumerate(mask):
-        if val and start is None:
+    gaps, start = [], None
+    for i, m in enumerate(mask):
+        if m and start is None:
             start = i
-        if not val and start is not None:
-            gaps.append((start, i-1))
-            start = None
+        if not m and start is not None:
+            gaps.append((start, i-1)); start = None
     if start is not None:
         gaps.append((start, len(mask)-1))
     return gaps
 
 
-def fill_small_gaps(series, max_gap=10, n_neighbors=4):
+def fill_and_flag(series, max_gap=10, n_neighbors=4):
+    """
+    Fill small gaps and return filled series and an 'Interpolated' boolean mask.
+    """
+    orig = series.copy()
     s = series.copy()
     mask = s.isna().values
     idxs = s.index
@@ -58,19 +53,19 @@ def fill_small_gaps(series, max_gap=10, n_neighbors=4):
             pad_start = max(start - n_neighbors, 0)
             pad_end = min(end + n_neighbors, len(idxs)-1)
             segment = s.iloc[pad_start:pad_end+1]
-            s.iloc[pad_start:pad_end+1] = segment.interpolate(method='linear')
-    return s
+            s.iloc[pad_start:pad_end+1] = segment.interpolate()
+    interpolated = orig.isna() & s.notna()
+    return s, interpolated
 
 # --- Streamlit App ---
 st.set_page_config(page_title="All Souls Cathedral: Q1 Environmental Data Analysis", layout="wide")
 st.sidebar.title("Settings")
 
-# Sidebar inputs
 folder = st.sidebar.text_input("Data folder path", value="./data")
 start_date = st.sidebar.date_input("Start date", value=datetime(2025,1,1))
 end_date = st.sidebar.date_input("End date", value=datetime.today())
 
-# Load button: ingest and preprocess data
+# Load Data
 if st.sidebar.button("Load Data"):
     files = glob.glob(os.path.join(folder, "AS*_export_*.csv"))
     device_dfs = {}
@@ -78,45 +73,49 @@ if st.sidebar.button("Load Data"):
         df = load_and_clean_csv(f)
         device_dfs[df['Device'].iloc[0]] = df
 
-    # Determine master timeline
     master = max(device_dfs, key=lambda d: len(device_dfs[d]))
-    master_index = device_dfs[master].sort_values('Timestamp')['Timestamp']
+    master_idx = device_dfs[master].sort_values('Timestamp')['Timestamp']
 
-    # Reindex and fill gaps
     processed = []
-    for device, df in device_dfs.items():
-        tmp = df.set_index('Timestamp').reindex(master_index)
-        tmp['Temp_F'] = fill_small_gaps(tmp['Temp_F'])
-        tmp['RH'] = fill_small_gaps(tmp['RH'])
-        tmp['Device'] = device
-        processed.append(tmp.reset_index().rename(columns={'index': 'Timestamp'}))
-    df_all = pd.concat(processed, ignore_index=True)
+    for dev, df in device_dfs.items():
+        tmp = df.set_index('Timestamp').reindex(master_idx)
+        filled_temp, flag_temp = fill_and_flag(tmp['Temp_F'])
+        filled_rh, flag_rh = fill_and_flag(tmp['RH'])
+        tmp['Temp_F'] = filled_temp
+        tmp['RH'] = filled_rh
+        tmp['Interpolated'] = flag_temp  # or flag_rh if separate
+        tmp['Device'] = dev
+        processed.append(tmp.reset_index().rename(columns={'index':'Timestamp'}))
 
-    # Store in session state
-    st.session_state['df_all'] = df_all
-    st.session_state['devices'] = sorted(df_all['Device'].unique())
+    st.session_state.df_all = pd.concat(processed, ignore_index=True)
+    st.session_state.devices = sorted(st.session_state.df_all['Device'].unique())
 
-# Device selection
+# Device selector
 devices = st.session_state.get('devices', [])
 selected = st.sidebar.multiselect("Select devices to analyze", options=devices, default=devices)
 
-# Analyze button: filter and plot
+# Analyze & Plot
 if st.sidebar.button("Analyze"):
-    if 'df_all' not in st.session_state:
-        st.error("Please click 'Load Data' first to ingest CSV files.")
+    if not hasattr(st.session_state, 'df_all'):
+        st.error("Please load data first.")
     else:
-        df_all = st.session_state['df_all']
-        # Filter by selected devices and date range
-        df_sel = df_all[df_all['Device'].isin(selected)]
-        mask = (df_sel['Timestamp'].dt.date >= start_date) & (df_sel['Timestamp'].dt.date <= end_date)
-        df_sel = df_sel.loc[mask]
+        df = st.session_state.df_all
+        df = df[df['Device'].isin(selected)]
+        df = df[(df['Timestamp'].dt.date >= start_date) & (df['Timestamp'].dt.date <= end_date)]
+        # Long-form for Altair
+        df_long = df.melt(id_vars=['Timestamp','Device','Interpolated'], value_vars=['Temp_F'], var_name='Metric')
 
-        # Plot time series for all selected devices
-        st.header("Temperature (°F) Time Series for Selected Devices")
-        ts = df_sel.pivot(index='Timestamp', columns='Device', values='Temp_F')
-        st.line_chart(ts)
+        line = alt.Chart(df_long).mark_line().encode(
+            x='Timestamp:T',
+            y='value:Q',
+            color='Device:N'
+        )
+        points = alt.Chart(df_long[df_long['Interpolated']]).mark_circle(size=50).encode(
+            x='Timestamp:T',
+            y='value:Q',
+            color=alt.value('red')
+        )
+        chart = (line + points).properties(width=800, height=400)
+        st.altair_chart(chart, use_container_width=True)
 else:
-    if 'df_all' not in st.session_state:
-        st.info("Enter the data folder path, then click 'Load Data' to begin.")
-    else:
-        st.info("Devices loaded. Use the multiselect and click 'Analyze' to view the plot.")
+    st.info("Use 'Load Data' then select devices and 'Analyze' to view time series with interpolated points flagged.")
