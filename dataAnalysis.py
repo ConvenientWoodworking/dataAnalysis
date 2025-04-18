@@ -39,9 +39,6 @@ def find_contiguous_nans(mask):
 
 
 def fill_and_flag(series, max_gap=10, n_neighbors=4):
-    """
-    Fill small gaps and return filled series and an 'Interpolated' boolean mask.
-    """
     orig = series.copy()
     s = series.copy()
     mask = s.isna().values
@@ -107,7 +104,7 @@ for dev in attic:
         key = f"chk_{dev}"
         if key not in st.session_state:
             st.session_state[key] = True
-        st.session_state[key] = st.sidebar.checkbox(dev, value=st.session_state[key], key=key)
+        st.sidebar.checkbox(dev, key=key)
 
 st.sidebar.markdown("### Main")
 for dev in main:
@@ -115,7 +112,7 @@ for dev in main:
         key = f"chk_{dev}"
         if key not in st.session_state:
             st.session_state[key] = True
-        st.session_state[key] = st.sidebar.checkbox(dev, value=st.session_state[key], key=key)
+        st.sidebar.checkbox(dev, key=key)
 
 st.sidebar.markdown("### Crawlspace")
 for dev in crawlspace:
@@ -123,7 +120,7 @@ for dev in crawlspace:
         key = f"chk_{dev}"
         if key not in st.session_state:
             st.session_state[key] = True
-        st.session_state[key] = st.sidebar.checkbox(dev, value=st.session_state[key], key=key)
+        st.sidebar.checkbox(dev, key=key)
 
 selected = [dev for dev in devices if st.session_state.get(f"chk_{dev}")]
 
