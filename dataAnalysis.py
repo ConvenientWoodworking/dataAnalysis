@@ -265,11 +265,11 @@ if st.sidebar.button('Analyze'):
 
         # Corr vs AS10 tables
         st.header('Pearson Corr vs Outdoor Reference (Temp)')
-        cvt = compute_correlations(df, field='Temp_F')['Outdoor-Reference']
+        cvt = compute_correlations(df, field='Temp_F')['Outdoor Reference']
         st.table(cvt.reset_index().rename(columns={'index':'DeviceName','Outdoor-Reference':'Corr'}))
 
         st.header('Pearson Corr vs Outdoor Reference (RH)')
-        cvr = compute_correlations(df, field='RH')['Outdoor-Reference']
+        cvr = compute_correlations(df, field='RH')['Outdoor Reference']
         st.table(cvr.reset_index().rename(columns={'index':'DeviceName','Outdoor-Reference':'Corr'}))
 
         # Summary Stats
