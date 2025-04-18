@@ -136,7 +136,13 @@ def group_ui(group, label):
 group_ui(attic,      "Attic")
 group_ui(main,       "Main")
 group_ui(crawlspace, "Crawlspace")
-group_ui(outdoor,    "Outdoor Reference")
+# Outdoor Reference checkboxes (no select/deselect buttons)
+st.sidebar.markdown("**Outdoor Reference**")
+for d in outdoor:
+    if d in devices:
+        key = f"chk_{d}"
+        st.session_state.setdefault(key, True)
+        st.sidebar.checkbox(d, key=key)
 
 selected = [d for d in devices if st.session_state.get(f"chk_{d}")]
 
