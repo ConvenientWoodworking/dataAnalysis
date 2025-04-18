@@ -108,6 +108,7 @@ def compute_correlations(df, field='Temp_F'):
 
 # --- Streamlit App ---
 st.set_page_config(page_title='All Souls Cathedral: Q1 Environmental Data Analysis', layout='wide')
+st.header('All Souls Cathedral: Q1 Environmental Data Analysis')
 
 # Sidebar logo
 #logo_path = 'Logo.PNG'
