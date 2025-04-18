@@ -285,7 +285,7 @@ if st.sidebar.button('Analyze'):
             st.table(cvr.reset_index().rename(columns={'index':'DeviceName','Outdoor-Reference':'Corr'}))
 
        # else:
-            st.warning("Outdoor Reference must be selected to calculate Normalized Data")
+        #    st.warning("Outdoor Reference must be selected to calculate Normalized Data")
 
         # Summary Stats
         st.header('Summary Statistics (Temperature)')
