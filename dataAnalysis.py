@@ -59,12 +59,11 @@ def fill_and_flag(series, max_gap=10, n_neighbors=4):
 def compute_summary_stats(df, field='Temp_F'):
     stats = df.groupby('Device').agg(
         count=(field, 'count'),
-        mean=(field, 'mean'),
+        avg=(field, 'mean'),
         std=(field, 'std'),
         min=(field, 'min'),
         max=(field, 'max'),
         median=(field, lambda x: x.quantile(0.5)),
-        p90=(field, lambda x: x.quantile(0.9)),
         missing=(field, lambda x: x.isna().sum())
     ).reset_index()
     return stats
@@ -113,70 +112,56 @@ if st.sidebar.button("Load Data"):
     st.session_state.df_all = pd.concat(processed, ignore_index=True)
     st.session_state.devices = sorted(st.session_state.df_all['Device'].unique())
 
-# Device selector with grouped checkboxes and select/deselect
+# Device selector with grouped checkboxes
 devices = st.session_state.get('devices', [])
 attic = [f"AS{i:02d}" for i in range(15,24)]
 main = [f"AS{i:02d}" for i in range(1,15) if i != 10]
 crawlspace = [f"AS{i:02d}" for i in range(24,34)]
 outdoorref = ["AS10"]
 
-# Attic group controls
 st.sidebar.markdown("### Attic")
 if devices:
     if st.sidebar.button("Select All Attic", key="select_all_attic"):
         for dev in attic:
-            if dev in devices:
-                st.session_state[f"chk_{dev}"] = True
+            if dev in devices: st.session_state[f"chk_{dev}"] = True
     if st.sidebar.button("Deselect All Attic", key="deselect_all_attic"):
         for dev in attic:
-            if dev in devices:
-                st.session_state[f"chk_{dev}"] = False
+            if dev in devices: st.session_state[f"chk_{dev}"] = False
 for dev in attic:
     if dev in devices:
-        key = f"chk_{dev}"
-        st.session_state.setdefault(key, True)
+        key = f"chk_{dev}"; st.session_state.setdefault(key, True)
         st.sidebar.checkbox(dev, key=key)
 
-# Main group controls
 st.sidebar.markdown("### Main")
 if devices:
     if st.sidebar.button("Select All Main", key="select_all_main"):
         for dev in main:
-            if dev in devices:
-                st.session_state[f"chk_{dev}"] = True
+            if dev in devices: st.session_state[f"chk_{dev}"] = True
     if st.sidebar.button("Deselect All Main", key="deselect_all_main"):
         for dev in main:
-            if dev in devices:
-                st.session_state[f"chk_{dev}"] = False
+            if dev in devices: st.session_state[f"chk_{dev}"] = False
 for dev in main:
     if dev in devices:
-        key = f"chk_{dev}"
-        st.session_state.setdefault(key, True)
+        key = f"chk_{dev}"; st.session_state.setdefault(key, True)
         st.sidebar.checkbox(dev, key=key)
 
-# Crawlspace group controls
 st.sidebar.markdown("### Crawlspace")
 if devices:
     if st.sidebar.button("Select All Crawlspace", key="select_all_crawl"):
         for dev in crawlspace:
-            if dev in devices:
-                st.session_state[f"chk_{dev}"] = True
+            if dev in devices: st.session_state[f"chk_{dev}"] = True
     if st.sidebar.button("Deselect All Crawlspace", key="deselect_all_crawl"):
         for dev in crawlspace:
-            if dev in devices:
-                st.session_state[f"chk_{dev}"] = False
+            if dev in devices: st.session_state[f"chk_{dev}"] = False
 for dev in crawlspace:
     if dev in devices:
-        key = f"chk_{dev}"
-        st.session_state.setdefault(key, True)
+        key = f"chk_{dev}"; st.session_state.setdefault(key, True)
         st.sidebar.checkbox(dev, key=key)
 
-# Outdoor Reference controls
 st.sidebar.markdown("### Outdoor Reference")
 for dev in outdoorref:
     if dev in devices:
-        key = f"chk_{dev}"
-        st.session_state.setdefault(key, True)
+        key = f"chk_{dev}"; st.session_state.setdefault(key, True)
         st.sidebar.checkbox(dev, key=key)
 
 selected = [dev for dev in devices if st.session_state.get(f"chk_{dev}")]
@@ -192,50 +177,38 @@ if st.sidebar.button("Analyze"):
         df = df.loc[mask]
 
         # Temperature plot
-        df_temp = df.melt(
-            id_vars=['Timestamp','Device','Interpolated'],
-            value_vars=['Temp_F'],
-            var_name='Metric'
-        )
-        line_temp = alt.Chart(df_temp).mark_line().encode(
-            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
-            y='value:Q',
-            color='Device:N'
-        )
-        points_temp = alt.Chart(df_temp[df_temp['Interpolated']]).mark_circle(size=50).encode(
-            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
-            y='value:Q',
-            color=alt.value('red')
-        )
-        chart_temp = (line_temp + points_temp).properties(
-            title="Temperature Data",
-            width=800,
-            height=400
-        )
-        st.altair_chart(chart_temp, use_container_width=True)
+        df_temp = df.melt(id_vars=['Timestamp','Device','Interpolated'], value_vars=['Temp_F'], var_name='Metric')
+        line_temp = alt.Chart(df_temp).mark_line().encode(x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')), y='value:Q', color='Device:N')
+        points_temp = alt.Chart(df_temp[df_temp['Interpolated']]).mark_circle(size=50).encode(x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')), y='value:Q', color=alt.value('red'))
+        st.altair_chart((line_temp+points_temp).properties(title="Temperature Data", width=800, height=400), use_container_width=True)
 
         # Relative Humidity plot
-        df_rh = df.melt(
-            id_vars=['Timestamp','Device','Interpolated'],
-            value_vars=['RH'],
-            var_name='Metric'
-        )
-        line_rh = alt.Chart(df_rh).mark_line().encode(
+        df_rh = df.melt(id_vars=['Timestamp','Device','Interpolated'], value_vars=['RH'], var_name='Metric')
+        line_rh = alt.Chart(df_rh).mark_line().encode(x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')), y='value:Q', color='Device:N')
+        points_rh = alt.Chart(df_rh[df_rh['Interpolated']]).mark_circle(size=50).encode(x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')), y='value:Q', color=alt.value('red'))
+        st.altair_chart((line_rh+points_rh).properties(title="Relative Humidity Data", width=800, height=400), use_container_width=True)
+
+        # Normalized Temperature Diff
+        df_out = df[df['Device']=='AS10'][['Timestamp','Temp_F','RH']].rename(columns={'Temp_F':'Temp_out','RH':'RH_out'})
+        df_norm = pd.merge(df, df_out, on='Timestamp', how='left')
+        df_norm['Norm_Temp'] = df_norm['Temp_F'] - df_norm['Temp_out']
+        df_norm_temp = df_norm.melt(id_vars=['Timestamp','Device'], value_vars=['Norm_Temp'], var_name='Metric')
+        chart_norm_t = alt.Chart(df_norm_temp).mark_line().encode(
             x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
             y='value:Q',
             color='Device:N'
-        )
-        points_rh = alt.Chart(df_rh[df_rh['Interpolated']]).mark_circle(size=50).encode(
+        ).properties(title="Normalized Temperature Difference", width=800, height=400)
+        st.altair_chart(chart_norm_t, use_container_width=True)
+
+        # Normalized RH Diff
+        df_norm['Norm_RH'] = df_norm['RH'] - df_norm['RH_out']
+        df_norm_rh = df_norm.melt(id_vars=['Timestamp','Device'], value_vars=['Norm_RH'], var_name='Metric')
+        chart_norm_r = alt.Chart(df_norm_rh).mark_line().encode(
             x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
             y='value:Q',
-            color=alt.value('red')
-        )
-        chart_rh = (line_rh + points_rh).properties(
-            title="Relative Humidity Data",
-            width=800,
-            height=400
-        )
-        st.altair_chart(chart_rh, use_container_width=True)
+            color='Device:N'
+        ).properties(title="Normalized Relative Humidity Difference", width=800, height=400)
+        st.altair_chart(chart_norm_r, use_container_width=True)
 
         # Statistical Analysis
         st.header("Summary Statistics (Temperature)")
@@ -246,12 +219,12 @@ if st.sidebar.button("Analyze"):
         summary_rh = compute_summary_stats(df, field='RH')
         st.dataframe(summary_rh)
 
-        st.header("Pearson Correlation vs AS10 (Temperature)")
+        st.header("Pearson Correlation vs Outdoor Reference (Temperature)")
         corr_temp = compute_correlations(df, field='Temp_F', ref_dev='AS10')
-        st.table(corr_temp.reset_index().rename(columns={"index":"Device", "AS10": "Correlation"}))
+        st.table(corr_temp.reset_index().rename(columns={"index":"Device"}))
 
-        st.header("Pearson Correlation vs AS10 (RH)")
+        st.header("Pearson Correlation vs Outdoor Reference (RH)")
         corr_rh = compute_correlations(df, field='RH', ref_dev='AS10')
-        st.table(corr_rh.reset_index().rename(columns={"index":"Device", "AS10": "Correlation"}))
+        st.table(corr_rh.reset_index().rename(columns={"index":"Device"}))
 else:
     st.info("Use 'Load Data' then select devices and 'Analyze' to view time series with interpolated points flagged.")
