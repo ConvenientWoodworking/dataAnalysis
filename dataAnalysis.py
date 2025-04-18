@@ -124,7 +124,7 @@ for dev in crawlspace:
         st.sidebar.checkbox(dev, key=key)
 
 st.sidebar.markdown("### Outdoor Reference")
-  for dev in outdoorref:
+for dev in outdoorref:
     if dev in devices:
         key = f"chk_{dev}"
         if key not in st.session_state:
