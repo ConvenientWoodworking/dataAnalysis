@@ -55,6 +55,26 @@ def fill_and_flag(series, max_gap=10, n_neighbors=4):
     interpolated = orig.isna() & s.notna()
     return s, interpolated
 
+
+def compute_summary_stats(df, field='Temp_F'):
+    stats = df.groupby('Device').agg(
+        count=(field, 'count'),
+        mean=(field, 'mean'),
+        std=(field, 'std'),
+        min=(field, 'min'),
+        max=(field, 'max'),
+        median=(field, lambda x: x.quantile(0.5)),
+        p90=(field, lambda x: x.quantile(0.9)),
+        missing=(field, lambda x: x.isna().sum())
+    ).reset_index()
+    return stats
+
+
+def compute_correlations(df, field='Temp_F', ref_dev='AS10'):
+    pivot = df.pivot(index='Timestamp', columns='Device', values=field)
+    corr = pivot.corr(method='pearson')
+    return corr[ref_dev].drop(ref_dev)
+
 # --- Streamlit App ---
 st.set_page_config(page_title="All Souls Cathedral: Q1 Environmental Data Analysis", layout="wide")
 st.sidebar.title("Settings")
@@ -95,7 +115,6 @@ if st.sidebar.button("Load Data"):
 
 # Device selector with grouped checkboxes and select/deselect
 devices = st.session_state.get('devices', [])
-
 attic = [f"AS{i:02d}" for i in range(15,24)]
 main = [f"AS{i:02d}" for i in range(1,15) if i != 10]
 crawlspace = [f"AS{i:02d}" for i in range(24,34)]
@@ -118,6 +137,7 @@ for dev in attic:
         st.session_state.setdefault(key, True)
         st.sidebar.checkbox(dev, key=key)
 
+# Main group controls
 st.sidebar.markdown("### Main")
 if devices:
     if st.sidebar.button("Select All Main", key="select_all_main"):
@@ -134,6 +154,7 @@ for dev in main:
         st.session_state.setdefault(key, True)
         st.sidebar.checkbox(dev, key=key)
 
+# Crawlspace group controls
 st.sidebar.markdown("### Crawlspace")
 if devices:
     if st.sidebar.button("Select All Crawlspace", key="select_all_crawl"):
@@ -150,6 +171,7 @@ for dev in crawlspace:
         st.session_state.setdefault(key, True)
         st.sidebar.checkbox(dev, key=key)
 
+# Outdoor Reference controls
 st.sidebar.markdown("### Outdoor Reference")
 for dev in outdoorref:
     if dev in devices:
@@ -159,14 +181,15 @@ for dev in outdoorref:
 
 selected = [dev for dev in devices if st.session_state.get(f"chk_{dev}")]
 
-# Analyze & Plot
+# Analyze & Plot & Stats
 if st.sidebar.button("Analyze"):
     if 'df_all' not in st.session_state:
         st.error("Please load data first.")
     else:
         df = st.session_state.df_all
         df = df[df['Device'].isin(selected)]
-        df = df[(df['Timestamp'].dt.date >= start_date) & (df['Timestamp'].dt.date <= end_date)]
+        mask = (df['Timestamp'].dt.date >= start_date) & (df['Timestamp'].dt.date <= end_date)
+        df = df.loc[mask]
 
         # Temperature plot
         df_temp = df.melt(
@@ -213,5 +236,22 @@ if st.sidebar.button("Analyze"):
             height=400
         )
         st.altair_chart(chart_rh, use_container_width=True)
+
+        # Statistical Analysis
+        st.header("Summary Statistics (Temperature)")
+        summary_temp = compute_summary_stats(df, field='Temp_F')
+        st.dataframe(summary_temp)
+
+        st.header("Summary Statistics (Relative Humidity)")
+        summary_rh = compute_summary_stats(df, field='RH')
+        st.dataframe(summary_rh)
+
+        st.header("Pearson Correlation vs AS10 (Temperature)")
+        corr_temp = compute_correlations(df, field='Temp_F', ref_dev='AS10')
+        st.table(corr_temp.reset_index().rename(columns={"index":"Device", "AS10": "Correlation"}))
+
+        st.header("Pearson Correlation vs AS10 (RH)")
+        corr_rh = compute_correlations(df, field='RH', ref_dev='AS10')
+        st.table(corr_rh.reset_index().rename(columns={"index":"Device", "AS10": "Correlation"}))
 else:
     st.info("Use 'Load Data' then select devices and 'Analyze' to view time series with interpolated points flagged.")
