@@ -253,8 +253,9 @@ if st.sidebar.button('Analyze'):
             x='DeviceName2:O', y='DeviceName:O', color='Corr:Q'
         ).properties(width=400, height=400)
         st.altair_chart(heat_h, use_container_width=False)
-        
-        if st.session_state.get('chk_Outdoor Reference', False):
+
+        # Show normalized charts only if the Outdoor Reference checkbox is checked
+       # if st.session_state.get('chk_Outdoor Reference', False):
         # Normalized Temperature Difference plot
             df_out = df[df['Device']=='AS10'][['Timestamp','Temp_F','RH']].rename(columns={'Temp_F':'T_out','RH':'RH_out'})
             df_norm = df.merge(df_out, on='Timestamp')
@@ -283,7 +284,7 @@ if st.sidebar.button('Analyze'):
             cvr = compute_correlations(df, field='RH')['Outdoor Reference']
             st.table(cvr.reset_index().rename(columns={'index':'DeviceName','Outdoor-Reference':'Corr'}))
 
-        else:
+       # else:
             st.warning("Outdoor Reference must be selected to calculate Normalized Data")
 
         # Summary Stats
