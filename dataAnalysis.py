@@ -120,7 +120,7 @@ main = [f"AS{i:02d}" for i in range(1,15) if i != 10]
 crawlspace = [f"AS{i:02d}" for i in range(24,34)]
 outdoorref = ["AS10"]
 
-'''# Attic group controls
+# Attic group controls
 st.sidebar.markdown("### Attic")
 if devices:
     if st.sidebar.button("Select All Attic", key="select_all_attic"):
@@ -180,33 +180,6 @@ for dev in outdoorref:
         st.sidebar.checkbox(dev, key=key)
 
 selected = [dev for dev in devices if st.session_state.get(f"chk_{dev}")]
-'''
-# Helper for group checkboxes
-def group_checkboxes(group, label):
-    st.sidebar.markdown(f"### {label}")
-    cols = st.sidebar.columns([1,1])
-    if cols[0].button(f"Select All {label}"):
-        for d in group:
-            if d in devices: st.session_state[f"chk_{d}"] = True
-    if cols[1].button(f"Deselect All {label}"):
-        for d in group:
-            if d in devices: st.session_state[f"chk_{d}"] = False
-    for d in group:
-        if d in devices:
-            key = f"chk_{d}"
-            st.session_state.setdefault(key, True)
-            st.sidebar.checkbox(d, key=key)
-
-group_checkboxes(attic,      "Attic")
-group_checkboxes(main,       "Main")
-group_checkboxes(crawlspace, "Crawlspace")
-for d in outdoor:
-    if d in devices:
-        key = f"chk_{d}"
-        st.session_state.setdefault(key, True)
-        st.sidebar.checkbox(d, key=key)
-
-selected = [d for d in devices if st.session_state.get(f"chk_{d}")]
 
 # Analyze & Plot & Stats
 if st.sidebar.button("Analyze"):
