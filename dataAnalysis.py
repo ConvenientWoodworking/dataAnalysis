@@ -126,9 +126,9 @@ FOLDER = './data'
 # Date selectors
 date_cols = st.sidebar.columns(2)
 date_cols[0].write('Start date')
-start_date = date_cols[0].date_input('', value=datetime(2025,1,1))
+start_date = date_cols[0].date_input("Start Date", value=datetime(2025, 1, 1), label_visibility="collapsed")
 date_cols[1].write('End date')
-end_date   = date_cols[1].date_input('', value=datetime.today())
+end_date   = date_cols[1].date_input("End Date", value=datetime.today(), label_visibility="collapsed")
 
 # Load Data button
 if st.sidebar.button('Load Data'):
