@@ -97,6 +97,7 @@ devices = st.session_state.get('devices', [])
 attic = [f"AS{i:02d}" for i in range(15,24)]
 main = [f"AS{i:02d}" for i in range(1,15) if i != 10]
 crawlspace = [f"AS{i:02d}" for i in range(24,34)]
+outdoorref = [f"AS{i:02d}" for i=10]
 
 st.sidebar.markdown("### Attic")
 for dev in attic:
@@ -122,6 +123,14 @@ for dev in crawlspace:
             st.session_state[key] = True
         st.sidebar.checkbox(dev, key=key)
 
+st.sidebar.markdown("### Outdoor Reference")
+  for dev in outdoorref:
+    if dev in devices:
+        key = f"chk_{dev}"
+        if key not in st.session_state:
+            st.session_state[key] = True
+        st.sidebar.checkbox(dev, key=key)
+      
 selected = [dev for dev in devices if st.session_state.get(f"chk_{dev}")]
 
 # Analyze & Plot
