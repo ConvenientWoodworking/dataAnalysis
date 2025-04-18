@@ -78,21 +78,54 @@ if st.sidebar.button("Load Data"):
 
     processed = []
     for dev, df in device_dfs.items():
-        tmp = df.set_index('Timestamp').reindex(master_idx, method='nearest', tolerance=pd.Timedelta(minutes=30))
+        tmp = df.set_index('Timestamp').reindex(
+            master_idx,
+            method='nearest',
+            tolerance=pd.Timedelta(minutes=30)
+        )
         filled_temp, flag_temp = fill_and_flag(tmp['Temp_F'])
         filled_rh, flag_rh = fill_and_flag(tmp['RH'])
         tmp['Temp_F'] = filled_temp
         tmp['RH'] = filled_rh
-        tmp['Interpolated'] = flag_temp  # or flag_rh if separate
+        tmp['Interpolated'] = flag_temp
         tmp['Device'] = dev
         processed.append(tmp.reset_index().rename(columns={'index':'Timestamp'}))
 
     st.session_state.df_all = pd.concat(processed, ignore_index=True)
     st.session_state.devices = sorted(st.session_state.df_all['Device'].unique())
 
-# Device selector
+# Device selector with grouped checkboxes
 devices = st.session_state.get('devices', [])
-selected = st.sidebar.multiselect("Select devices to analyze", options=devices, default=devices)
+
+attic = [f"AS{i:02d}" for i in range(15,24)]
+main = [f"AS{i:02d}" for i in range(1,15) if i != 10]
+crawlspace = [f"AS{i:02d}" for i in range(24,34)]
+
+st.sidebar.markdown("### Attic")
+for dev in attic:
+    if dev in devices:
+        key = f"chk_{dev}"
+        if key not in st.session_state:
+            st.session_state[key] = True
+        st.session_state[key] = st.sidebar.checkbox(dev, value=st.session_state[key], key=key)
+
+st.sidebar.markdown("### Main")
+for dev in main:
+    if dev in devices:
+        key = f"chk_{dev}"
+        if key not in st.session_state:
+            st.session_state[key] = True
+        st.session_state[key] = st.sidebar.checkbox(dev, value=st.session_state[key], key=key)
+
+st.sidebar.markdown("### Crawlspace")
+for dev in crawlspace:
+    if dev in devices:
+        key = f"chk_{dev}"
+        if key not in st.session_state:
+            st.session_state[key] = True
+        st.session_state[key] = st.sidebar.checkbox(dev, value=st.session_state[key], key=key)
+
+selected = [dev for dev in devices if st.session_state.get(f"chk_{dev}")]
 
 # Analyze & Plot
 if st.sidebar.button("Analyze"):
@@ -102,16 +135,19 @@ if st.sidebar.button("Analyze"):
         df = st.session_state.df_all
         df = df[df['Device'].isin(selected)]
         df = df[(df['Timestamp'].dt.date >= start_date) & (df['Timestamp'].dt.date <= end_date)]
-        # Long-form for Altair
-        df_long = df.melt(id_vars=['Timestamp','Device','Interpolated'], value_vars=['Temp_F'], var_name='Metric')
+        df_long = df.melt(
+            id_vars=['Timestamp','Device','Interpolated'],
+            value_vars=['Temp_F'],
+            var_name='Metric'
+        )
 
         line = alt.Chart(df_long).mark_line().encode(
-            x='Timestamp:T',
+            x=alt.X('Timestamp:T', axis=alt.Axis(format='%d/%m')),
             y='value:Q',
             color='Device:N'
         )
         points = alt.Chart(df_long[df_long['Interpolated']]).mark_circle(size=50).encode(
-            x='Timestamp:T',
+            x=alt.X('Timestamp:T', axis=alt.Axis(format='%d/%m')),
             y='value:Q',
             color=alt.value('red')
         )
