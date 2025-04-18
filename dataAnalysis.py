@@ -212,7 +212,8 @@ if st.sidebar.button('Analyze'):
         )
         line_temp = alt.Chart(df_t).mark_line().encode(
             x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
-            y=alt.Y('value:Q', title='Temperature (°F)'), color='DeviceName:N')
+            y=alt.Y('value:Q', title='Temperature (°F)'), color='DeviceName:N'
+        )
         pts_temp = alt.Chart(df_t[df_t['Interpolated']]).mark_circle(size=50, color='red').encode(
             x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
             y='value:Q'
@@ -220,11 +221,12 @@ if st.sidebar.button('Analyze'):
         st.altair_chart(line_temp + pts_temp, use_container_width=True)
 
         # Relative Humidity plot
+        st.header('Relative Humidity Data')
         df_r = df.melt(id_vars=['Timestamp','DeviceName','Interpolated'], value_vars=['RH'], var_name='Metric')
         line_rh = alt.Chart(df_r).mark_line().encode(
             x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
             y=alt.Y('value:Q', title='Relative Humidity (%)'), color='DeviceName:N'
-        ).properties(title='Relative Humidity Data')
+        )
         pts_rh = alt.Chart(df_r[df_r['Interpolated']]).mark_circle(size=50, color='red').encode(
             x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
             y='value:Q'
@@ -256,7 +258,8 @@ if st.sidebar.button('Analyze'):
 
         # Show normalized charts only if the Outdoor Reference checkbox is checked
         #if 'Outdoor Reference' in selected:
-            # Normalized Temperature Difference plot
+        # Normalized Temperature Difference plot
+        st.header('Normalized Temperature Difference')
         df_out = df[df['Device']=='AS10'][['Timestamp','Temp_F','RH']].rename(columns={'Temp_F':'T_out','RH':'RH_out'})
         df_norm = df.merge(df_out, on='Timestamp')
         df_norm['DeviceName'] = df_norm['Device'].map(DEVICE_LABELS).fillna(df_norm['Device'])
@@ -264,15 +267,16 @@ if st.sidebar.button('Analyze'):
         chart_norm_t = alt.Chart(df_norm).mark_line().encode(
             x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
             y=alt.Y('Norm_T:Q', title='Temp Difference (°F)'), color='DeviceName:N'
-        ).properties(title='Normalized Temperature Difference')
+        )
         st.altair_chart(chart_norm_t, use_container_width=True)
         
         # Normalized Relative Humidity Difference plot
+        st.header('Normalized Relative Humidity Difference')
         df_norm['Norm_RH'] = df_norm['RH'] - df_norm['RH_out']
         chart_norm_rh = alt.Chart(df_norm).mark_line().encode(
             x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
             y=alt.Y('Norm_RH:Q', title='RH Difference (%)'), color='DeviceName:N'
-        ).properties(title='Normalized Relative Humidity Difference')
+        )
         st.altair_chart(chart_norm_rh, use_container_width=True)         
         
         # Corr vs AS10 tables
