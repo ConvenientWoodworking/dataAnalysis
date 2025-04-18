@@ -108,14 +108,14 @@ def compute_correlations(df, field='Temp_F'):
 
 # --- Streamlit App ---
 st.set_page_config(page_title='All Souls Cathedral: Q1 Environmental Data Analysis', layout='wide')
-'''
+
 # Sidebar logo
-logo_path = 'Logo.PNG'
-if os.path.exists(logo_path):
-    st.sidebar.image(logo_path, use_container_width=True)
-else:
-    st.sidebar.warning(f"Logo not found at {logo_path}")
-'''
+#logo_path = 'Logo.PNG'
+#if os.path.exists(logo_path):
+#    st.sidebar.image(logo_path, use_container_width=True)
+#else:
+#    st.sidebar.warning(f"Logo not found at {logo_path}")
+
 # Settings header
 st.sidebar.title('Settings')
 #st.sidebar.image("./Logo.PNG", use_container_width=True)
