@@ -133,21 +133,36 @@ if st.sidebar.button("Analyze"):
         # Standard plots... (Temperature, RH, Normalized)
         # ...
 
-        # Correlation matrix for Temperature
+                # Correlation matrix for Temperature
         st.header("Correlation Matrix (Temperature)")
         corr_temp = compute_correlations(df, field='Temp_F')
-        corr_temp_df = corr_temp.reset_index().melt('Device', var_name='Device2', value_name='Corr')
+        # Prepare for heatmap: reset index and melt
+        corr_temp_df = (
+            corr_temp
+            .reset_index()
+            .rename(columns={'index':'Device'})
+            .melt(id_vars='Device', var_name='Device2', value_name='Corr')
+        )
         heatmap_temp = alt.Chart(corr_temp_df).mark_rect().encode(
-            x='Device2:O', y='Device:O', color='Corr:Q'
+            x='Device2:O',
+            y='Device:O',
+            color='Corr:Q'
         ).properties(width=400, height=400)
         st.altair_chart(heatmap_temp, use_container_width=False)
 
         # Correlation matrix for RH
         st.header("Correlation Matrix (Relative Humidity)")
         corr_rh = compute_correlations(df, field='RH')
-        corr_rh_df = corr_rh.reset_index().melt('Device', var_name='Device2', value_name='Corr')
+        corr_rh_df = (
+            corr_rh
+            .reset_index()
+            .rename(columns={'index':'Device'})
+            .melt(id_vars='Device', var_name='Device2', value_name='Corr')
+        )
         heatmap_rh = alt.Chart(corr_rh_df).mark_rect().encode(
-            x='Device2:O', y='Device:O', color='Corr:Q'
+            x='Device2:O',
+            y='Device:O',
+            color='Corr:Q'
         ).properties(width=400, height=400)
         st.altair_chart(heatmap_rh, use_container_width=False)
 
