@@ -20,7 +20,7 @@ DEVICE_LABELS = {
     'AS07': "CE Room-Main",
     'AS08': "Owen Library-Main",
     'AS09': "Reception Room-Main",
-    'AS10': "Garth-Main",
+    'AS10': "Outdoor Reference",
     'AS11': "Tower-Main",
     'AS12': "Robing Access-Main",
     'AS13': "Men's Robing-Main",
@@ -174,10 +174,11 @@ def group_ui(group, label):
 group_ui(attic,      'Attic')
 group_ui(main,       'Main')
 group_ui(crawlspace, 'Crawlspace')
-# Outdoor reference only name\st.sidebar.markdown('**Outdoor Reference**')
+# Outdoor Reference (no select/deselect buttons)
+st.sidebar.markdown("**Outdoor Reference**")
 for d in outdoor:
     if d in devices:
-        key = f'chk_{d}'
+        key = f"chk_{d}"
         st.session_state.setdefault(key, True)
         st.sidebar.checkbox(DEVICE_LABELS.get(d, d), key=key)
 
