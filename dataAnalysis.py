@@ -204,6 +204,7 @@ if st.sidebar.button('Analyze'):
         df = df[(df['Timestamp'].dt.date >= start_date) & (df['Timestamp'].dt.date <= end_date)]
 
         # Temperature plot
+        st.header('Temperature Data')
         df['DeviceName'] = df['Device'].map(DEVICE_LABELS).fillna(df['Device'])
         df_t = df.melt(
             id_vars=['Timestamp','DeviceName','Interpolated'],
@@ -211,8 +212,7 @@ if st.sidebar.button('Analyze'):
         )
         line_temp = alt.Chart(df_t).mark_line().encode(
             x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
-            y=alt.Y('value:Q', title='Temperature (°F)'), color='DeviceName:N'
-        ).properties(title='Temperature Data')
+            y=alt.Y('value:Q', title='Temperature (°F)'), color='DeviceName:N')
         pts_temp = alt.Chart(df_t[df_t['Interpolated']]).mark_circle(size=50, color='red').encode(
             x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
             y='value:Q'
