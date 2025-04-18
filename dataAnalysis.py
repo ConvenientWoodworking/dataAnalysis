@@ -152,25 +152,39 @@ if st.sidebar.button("Analyze"):
         df = df[df['Device'].isin(selected)]
         df = df[(df['Timestamp'].dt.date >= start_date) & (df['Timestamp'].dt.date <= end_date)]
 
-        # Temperature plot
-        df_t = df.melt(id_vars=['Timestamp','Device','Interpolated'], value_vars=['Temp_F'], var_name='Metric')
-        base_t = alt.Chart(df_t).encode(
-            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
-            y='value:Q', color='Device:N'
+                # Temperature plot
+        df_t = df.melt(
+            id_vars=['Timestamp','Device','Interpolated'],
+            value_vars=['Temp_F'],
+            var_name='Metric'
         )
-        st.altair_chart(
-            (base_t.mark_line() + base_t.transform_filter('Interpolated').mark_circle(color='red'))
-        , use_container_width=True)
+        line_temp = alt.Chart(df_t).mark_line().encode(
+            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
+            y=alt.Y('value:Q', title='Temperature (°F)'),
+            color='Device:N'
+        ).properties(title='Temperature Data')
+        points_temp = alt.Chart(df_t[df_t['Interpolated']]).mark_circle(size=50, color='red').encode(
+            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
+            y=alt.Y('value:Q')
+        )
+        st.altair_chart(line_temp + points_temp, use_container_width=True)
 
-        # RH plot
-        df_r = df.melt(id_vars=['Timestamp','Device','Interpolated'], value_vars=['RH'], var_name='Metric')
-        base_r = alt.Chart(df_r).encode(
-            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
-            y='value:Q', color='Device:N'
+        # Relative Humidity plot
+        df_r = df.melt(
+            id_vars=['Timestamp','Device','Interpolated'],
+            value_vars=['RH'],
+            var_name='Metric'
         )
-        st.altair_chart(
-            (base_r.mark_line() + base_r.transform_filter('Interpolated').mark_circle(color='red'))
-        , use_container_width=True)
+        line_rh = alt.Chart(df_r).mark_line().encode(
+            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
+            y=alt.Y('value:Q', title='Relative Humidity (%)'),
+            color='Device:N'
+        ).properties(title='Relative Humidity Data')
+        points_rh = alt.Chart(df_r[df_r['Interpolated']]).mark_circle(size=50, color='red').encode(
+            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
+            y=alt.Y('value:Q')
+        )
+        st.altair_chart(line_rh + points_rh, use_container_width=True)
 
         # Normalized diffs
         df_out = df[df['Device']=='AS10'][['Timestamp','Temp_F','RH']].rename(columns={'Temp_F':'T_out','RH':'RH_out'})
