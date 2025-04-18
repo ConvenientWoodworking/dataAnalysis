@@ -254,7 +254,7 @@ if st.sidebar.button('Analyze'):
         ).properties(width=400, height=400)
         st.altair_chart(heat_h, use_container_width=False)
         
-        if 'Outdoor Reference' in selected:
+        if st.session_state.get('chk_Outdoor Reference', False):
         # Normalized Temperature Difference plot
             df_out = df[df['Device']=='AS10'][['Timestamp','Temp_F','RH']].rename(columns={'Temp_F':'T_out','RH':'RH_out'})
             df_norm = df.merge(df_out, on='Timestamp')
