@@ -97,7 +97,7 @@ devices = st.session_state.get('devices', [])
 attic = [f"AS{i:02d}" for i in range(15,24)]
 main = [f"AS{i:02d}" for i in range(1,15) if i != 10]
 crawlspace = [f"AS{i:02d}" for i in range(24,34)]
-outdoorref = [f"AS{i:02d}" for i=10]
+outdoorref = ["AS10"]
 
 st.sidebar.markdown("### Attic")
 for dev in attic:
