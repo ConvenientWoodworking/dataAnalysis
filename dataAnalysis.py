@@ -32,7 +32,8 @@ def find_contiguous_nans(mask):
         if m and start is None:
             start = i
         if not m and start is not None:
-            gaps.append((start, i-1)); start = None
+            gaps.append((start, i-1))
+            start = None
     if start is not None:
         gaps.append((start, len(mask)-1))
     return gaps
@@ -58,7 +59,8 @@ def fill_and_flag(series, max_gap=10, n_neighbors=4):
 st.set_page_config(page_title="All Souls Cathedral: Q1 Environmental Data Analysis", layout="wide")
 st.sidebar.title("Settings")
 
-folder = st.sidebar.text_input("Data folder path", value="./data")
+# Hardcoded data folder path
+folder = "./data"
 start_date = st.sidebar.date_input("Start date", value=datetime(2025,1,1))
 end_date = st.sidebar.date_input("End date", value=datetime.today())
 
@@ -159,29 +161,57 @@ selected = [dev for dev in devices if st.session_state.get(f"chk_{dev}")]
 
 # Analyze & Plot
 if st.sidebar.button("Analyze"):
-    if not hasattr(st.session_state, 'df_all'):
+    if 'df_all' not in st.session_state:
         st.error("Please load data first.")
     else:
         df = st.session_state.df_all
         df = df[df['Device'].isin(selected)]
         df = df[(df['Timestamp'].dt.date >= start_date) & (df['Timestamp'].dt.date <= end_date)]
-        df_long = df.melt(
+
+        # Temperature plot
+        df_temp = df.melt(
             id_vars=['Timestamp','Device','Interpolated'],
             value_vars=['Temp_F'],
             var_name='Metric'
         )
-
-        line = alt.Chart(df_long).mark_line().encode(
+        line_temp = alt.Chart(df_temp).mark_line().encode(
             x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
             y='value:Q',
             color='Device:N'
         )
-        points = alt.Chart(df_long[df_long['Interpolated']]).mark_circle(size=50).encode(
+        points_temp = alt.Chart(df_temp[df_temp['Interpolated']]).mark_circle(size=50).encode(
             x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
             y='value:Q',
             color=alt.value('red')
         )
-        chart = (line + points).properties(width=800, height=400)
-        st.altair_chart(chart, use_container_width=True)
+        chart_temp = (line_temp + points_temp).properties(
+            title="Temperature Data",
+            width=800,
+            height=400
+        )
+        st.altair_chart(chart_temp, use_container_width=True)
+
+        # Relative Humidity plot
+        df_rh = df.melt(
+            id_vars=['Timestamp','Device','Interpolated'],
+            value_vars=['RH'],
+            var_name='Metric'
+        )
+        line_rh = alt.Chart(df_rh).mark_line().encode(
+            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
+            y='value:Q',
+            color='Device:N'
+        )
+        points_rh = alt.Chart(df_rh[df_rh['Interpolated']]).mark_circle(size=50).encode(
+            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
+            y='value:Q',
+            color=alt.value('red')
+        )
+        chart_rh = (line_rh + points_rh).properties(
+            title="Relative Humidity Data",
+            width=800,
+            height=400
+        )
+        st.altair_chart(chart_rh, use_container_width=True)
 else:
     st.info("Use 'Load Data' then select devices and 'Analyze' to view time series with interpolated points flagged.")
