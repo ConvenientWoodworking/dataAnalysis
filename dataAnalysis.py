@@ -31,7 +31,8 @@ def find_contiguous_nans(mask):
         if m and start is None:
             start = i
         if not m and start is not None:
-            gaps.append((start, i-1)); start = None
+            gaps.append((start, i-1))
+            start = None
     if start is not None:
         gaps.append((start, len(mask)-1))
     return gaps
@@ -99,7 +100,7 @@ if st.sidebar.button("Load Data"):
             master_times, method='nearest', tolerance=pd.Timedelta(minutes=30)
         )
         filled_t, flag_t = fill_and_flag(tmp['Temp_F'])
-        filled_r, flag_r = fill_and_flag(tmp['RH'])
+        filled_r, flag_rh = fill_and_flag(tmp['RH'])
         tmp['Temp_F']      = filled_t
         tmp['RH']          = filled_r
         tmp['Interpolated']= flag_t
@@ -119,11 +120,11 @@ outdoor    = ["AS10"]
 # Grouped checkboxes with dual-column buttons
 def group_ui(group, label):
     st.sidebar.markdown(f"**{label}**")
-    c1, c2 = st.sidebar.columns([1,1])
-    if c1.button(f"Select All {label}"):
+    col1, col2 = st.sidebar.columns([1,1])
+    if col1.button(f"Select All {label}"):
         for d in group:
             if d in devices: st.session_state[f"chk_{d}"] = True
-    if c2.button(f"Deselect All {label}"):
+    if col2.button(f"Deselect All {label}"):
         for d in group:
             if d in devices: st.session_state[f"chk_{d}"] = False
     for d in group:
@@ -135,11 +136,7 @@ def group_ui(group, label):
 group_ui(attic,      "Attic")
 group_ui(main,       "Main")
 group_ui(crawlspace, "Crawlspace")
-for d in outdoor:
-    if d in devices:
-        key = f"chk_{d}"
-        st.session_state.setdefault(key, True)
-        st.sidebar.checkbox(d, key=key)
+group_ui(outdoor,    "Outdoor Reference")
 
 selected = [d for d in devices if st.session_state.get(f"chk_{d}")]
 
@@ -152,7 +149,7 @@ if st.sidebar.button("Analyze"):
         df = df[df['Device'].isin(selected)]
         df = df[(df['Timestamp'].dt.date >= start_date) & (df['Timestamp'].dt.date <= end_date)]
 
-                # Temperature plot
+        # Temperature plot
         df_t = df.melt(
             id_vars=['Timestamp','Device','Interpolated'],
             value_vars=['Temp_F'],
@@ -186,23 +183,25 @@ if st.sidebar.button("Analyze"):
         )
         st.altair_chart(line_rh + points_rh, use_container_width=True)
 
-        # Normalized diffs
+        # Normalized Temperature Difference plot
         df_out = df[df['Device']=='AS10'][['Timestamp','Temp_F','RH']].rename(columns={'Temp_F':'T_out','RH':'RH_out'})
         df_norm = df.merge(df_out, on='Timestamp')
         df_norm['Norm_T']  = df_norm['Temp_F'] - df_norm['T_out']
-        df_norm['Norm_RH'] = df_norm['RH']     - df_norm['RH_out']
-        st.altair_chart(
-            alt.Chart(df_norm).mark_line().encode(
-                x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
-                y='Norm_T:Q', color='Device:N'
-            )
-        , use_container_width=True)
-        st.altair_chart(
-            alt.Chart(df_norm).mark_line().encode(
-                x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
-                y='Norm_RH:Q', color='Device:N'
-            )
-        , use_container_width=True)
+        chart_norm_t = alt.Chart(df_norm).mark_line().encode(
+            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
+            y=alt.Y('Norm_T:Q', title='Temp Difference (°F)'),
+            color='Device:N'
+        ).properties(title='Normalized Temperature Difference')
+        st.altair_chart(chart_norm_t, use_container_width=True)
+
+        # Normalized Relative Humidity Difference plot
+        df_norm['Norm_RH'] = df_norm['RH'] - df_norm['RH_out']
+        chart_norm_rh = alt.Chart(df_norm).mark_line().encode(
+            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
+            y=alt.Y('Norm_RH:Q', title='RH Difference (%)'),
+            color='Device:N'
+        ).properties(title='Normalized Relative Humidity Difference')
+        st.altair_chart(chart_norm_rh, use_container_width=True)
 
         # Correlation matrices
         st.header("Correlation Matrix (Temperature)")
@@ -231,6 +230,7 @@ if st.sidebar.button("Analyze"):
         st.header("Pearson Corr vs AS10 (Temp)")
         cvt = compute_correlations(df, field='Temp_F')['AS10']
         st.table(cvt.reset_index().rename(columns={"index":"Device","AS10":"Corr"}))
+
         st.header("Pearson Corr vs AS10 (RH)")
         cvr = compute_correlations(df, field='RH')['AS10']
         st.table(cvr.reset_index().rename(columns={"index":"Device","AS10":"Corr"}))
