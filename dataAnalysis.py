@@ -260,7 +260,7 @@ with tabs[1]:
         if m=='RH': thr=(rh_min,rh_max)
         st.altair_chart(plot_timeseries(df, m, thr), use_container_width=True)
     # Daily aggregates
-    daily = df.set_index('Timestamp').groupby([pd.Grouper(freq='D'))]['Temp_F','RH'].agg(['min','max','mean'])
+    daily = df.set_index('Timestamp').groupby([pd.Grouper(freq='D')])['Temp_F','RH'].agg(['min','max','mean'])
     st.line_chart(daily)
 
 # --- Tab 3: Diagnostics ---
