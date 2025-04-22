@@ -9,7 +9,6 @@ import altair as alt
 import streamlit as st
 
 # --- Device name mapping ---
-# Mapping from AS codes to friendly names
 DEVICE_LABELS = {
     'AS01': "Zabriskie-Main",
     'AS02': "Kitchen-Main",
@@ -44,6 +43,14 @@ DEVICE_LABELS = {
     'AS31': "East Nave-Crawlspace",
     'AS32': "Women's Robing-Crawlspace",
     'AS33': "Men's Robing-Crawlspace"
+}
+
+# --- Zone mapping for group summaries ---
+ZONE_MAP = {
+    **{f'AS{i:02d}': 'Main' for i in range(1,15) if i != 10},
+    **{f'AS{i:02d}': 'Attic' for i in range(15,24)},
+    **{f'AS{i:02d}': 'Crawlspace' for i in range(24,34)},
+    'AS10': 'Outdoor'
 }
 
 # --- Helper functions ---
@@ -90,6 +97,15 @@ def fill_and_flag(series, max_gap=10, n_neighbors=4):
     return s, interpolated
 
 
+def compute_dew_point_f(temp_f, rh):
+    # Magnus formula
+    temp_c = (temp_f - 32) * 5/9
+    a, b = 17.625, 243.04
+    alpha = np.log(rh/100) + (a * temp_c)/(b + temp_c)
+    dew_c = (b * alpha) / (a - alpha)
+    return dew_c * 9/5 + 32
+
+
 def compute_summary_stats(df, field='Temp_F'):
     return df.groupby('DeviceName').agg(
         count=(field, 'count'),
@@ -106,196 +122,172 @@ def compute_correlations(df, field='Temp_F'):
     pivot = df.pivot(index='Timestamp', columns='DeviceName', values=field)
     return pivot.corr(method='pearson')
 
+@st.cache_data
+def make_calendar_pivot(df, metric):
+    df = df.assign(
+        hour=df.Timestamp.dt.hour,
+        date=df.Timestamp.dt.date
+    )
+    pivot = df.pivot_table(
+        index='hour', columns='date', values=metric, aggfunc='mean'
+    ).reset_index().melt(id_vars='hour', var_name='date', value_name=metric)
+    return pivot
+
+@st.cache_data
+def compute_group_means(df):
+    df = df.copy()
+    df['Zone'] = df['Device'].map(ZONE_MAP)
+    return df.groupby(['Timestamp','Zone']).Temp_F.mean().reset_index()
+
 # --- Streamlit App ---
 st.set_page_config(page_title='All Souls Cathedral: Q1 Environmental Data Analysis', layout='wide')
 st.header('All Souls Cathedral: Q1 Environmental Data Analysis')
 
-# Sidebar logo
-#logo_path = 'Logo.PNG'
-#if os.path.exists(logo_path):
-#    st.sidebar.image(logo_path, use_container_width=True)
-#else:
-#    st.sidebar.warning(f"Logo not found at {logo_path}")
-
-# Settings header
+# Sidebar settings
 st.sidebar.title('Settings')
-#st.sidebar.image("./Logo.PNG", use_container_width=True)
-
-# Constants
 FOLDER = './data'
 
 # Date selectors
-date_cols = st.sidebar.columns(2)
-date_cols[0].write('Start date')
-start_date = date_cols[0].date_input("Start Date", value=datetime(2025, 1, 1), label_visibility="collapsed")
-date_cols[1].write('End date')
-end_date   = date_cols[1].date_input("End Date", value=datetime.today(), label_visibility="collapsed")
+start_date = st.sidebar.date_input('Start Date', value=datetime(2025,1,1))
+end_date   = st.sidebar.date_input('End Date',   value=datetime.today())
 
-# Load Data button
+# Metric selection
+metrics = st.sidebar.multiselect(
+    'Select Metrics',
+    ['Temperature','RH','Dew Point'],
+    default=['Temperature','RH']
+)
+
+# Threshold inputs
+st.sidebar.markdown('**Thresholds**')
+temp_min = st.sidebar.number_input('Temp Min (°F)', value=68.0)
+temp_max = st.sidebar.number_input('Temp Max (°F)', value=74.0)
+rh_min   = st.sidebar.number_input('RH Min (%)',   value=30.0)
+rh_max   = st.sidebar.number_input('RH Max (%)',   value=60.0)
+
+# Load data
 if st.sidebar.button('Load Data'):
     files = glob.glob(os.path.join(FOLDER, 'AS*_export_*.csv'))
     device_dfs = {load_and_clean_csv(f)['Device'].iloc[0]: load_and_clean_csv(f) for f in files}
-
     master = max(device_dfs, key=lambda d: len(device_dfs[d]))
     master_times = device_dfs[master].sort_values('Timestamp')['Timestamp']
-
     records = []
     for dev, df in device_dfs.items():
         tmp = df.set_index('Timestamp').reindex(
             master_times, method='nearest', tolerance=pd.Timedelta(minutes=30)
         )
-        filled_t, flag_t = fill_and_flag(tmp['Temp_F'])
-        filled_r, flag_r = fill_and_flag(tmp['RH'])
-        tmp['Temp_F']      = filled_t
-        tmp['RH']          = filled_r
-        tmp['Interpolated']= flag_t
-        tmp['Device']      = dev
-        # Map to friendly name
-        tmp['DeviceName']  = DEVICE_LABELS.get(dev, dev)
-        records.append(tmp.reset_index().rename(columns={'index':'Timestamp'}))
-
+        ft, fl = fill_and_flag(tmp['Temp_F'])
+        fr, frl = fill_and_flag(tmp['RH'])
+        tmp['Temp_F'], tmp['RH'] = ft, fr
+        tmp['Interpolated'] = fl | frl
+        tmp['Device'] = dev
+        tmp['DeviceName'] = DEVICE_LABELS.get(dev, dev)
+        # Dew point
+        tmp['Dew_Point'] = compute_dew_point_f(tmp['Temp_F'], tmp['RH'])
+        records.append(tmp.reset_index())
     df_all = pd.concat(records, ignore_index=True)
-    st.session_state.df_all    = df_all
-    st.session_state.devices   = sorted(df_all['Device'])
+    st.session_state.df_all = df_all
+    st.session_state.devices = sorted(df_all['Device'])
 
-# Device groupings
-devices    = st.session_state.get('devices', [])
-attic      = [f'AS{i:02d}' for i in range(15,24)]
-main       = [f'AS{i:02d}' for i in range(1,15) if i != 10]
-crawlspace = [f'AS{i:02d}' for i in range(24,34)]
-outdoor    = ['AS10']
+# Ensure data loaded
+if 'df_all' not in st.session_state:
+    st.info("Use 'Load Data' to begin.")
+    st.stop()
 
-# Grouped checkboxes
-def group_ui(group, label):
-    st.sidebar.markdown(f'**{label}**')
-    col1, col2 = st.sidebar.columns(2)
-    if col1.button(f'Select All {label}'):
-        for d in group:
-            if d in devices: st.session_state[f'chk_{d}'] = True
-    if col2.button(f'Deselect All {label}'):
-        for d in group:
-            if d in devices: st.session_state[f'chk_{d}'] = False
-    for d in group:
-        if d in devices:
-            key = f'chk_{d}'
-            st.session_state.setdefault(key, True)
-            label = DEVICE_LABELS.get(d, d)
-            st.sidebar.checkbox(label, key=key)
+# Filter by date & device
+df = st.session_state.df_all
+devices = st.session_state.devices
+# Device selection (existing checkboxes)
+for dev in devices:
+    key = f'chk_{dev}'
+    st.sidebar.checkbox(DEVICE_LABELS.get(dev,dev), key=key, value=st.session_state.get(key,True))
+selected = [d for d in devices if st.session_state.get(f'chk_{d}', False)]
+df = df[df['Device'].isin(selected)]
+df = df[(df['Timestamp'].dt.date >= start_date) & (df['Timestamp'].dt.date <= end_date)]
 
-group_ui(attic,      'Attic')
-group_ui(main,       'Main')
-group_ui(crawlspace, 'Crawlspace')
-# Outdoor Reference (no select/deselect buttons)
-st.sidebar.markdown("**Outdoor Reference**")
-for d in outdoor:
-    if d in devices:
-        key = f"chk_{d}"
-        st.session_state.setdefault(key, True)
-        st.sidebar.checkbox(DEVICE_LABELS.get(d, d), key=key)
+# Tabs for Tiered Dashboard
+tabs = st.tabs(['Summary','Time Series & Trends','Diagnostics'])
 
-selected = [d for d in devices if st.session_state.get(f'chk_{d}')]
+# --- Tab 1: Summary Cards ---
+with tabs[0]:
+    st.subheader('Insights at a Glance')
+    # Comfort % time in zone
+    comfort_df = df.copy()
+    comfort_df['InZone'] = (
+        (comfort_df.Temp_F.between(temp_min,temp_max)) &
+        (comfort_df.RH.between(rh_min,rh_max))
+    )
+    pct_in = comfort_df.groupby('DeviceName').InZone.mean().reset_index()
+    cols = st.columns(3)
+    for i, row in pct_in.iterrows():
+        if i<3:
+            cols[i].metric(row['DeviceName'], f"{row['InZone']*100:.1f}%")
+    # Condensation events
+    df['Condensation'] = (df['Temp_F'] <= df['Dew_Point'])
+    cond_events = df[df['Condensation']].groupby('DeviceName').size().reset_index(name='Events')
+    for j, row in cond_events.iterrows():
+        if j<3:
+            cols[j].metric(f"{row['DeviceName']} Cond Events", int(row['Events']))
 
-# Analyze & Display
-if st.sidebar.button('Analyze'):
-    if 'df_all' not in st.session_state:
-        st.error('Please load data first.')
-    else:
-        df = st.session_state.df_all
-        df = df[df['Device'].isin(selected)]
-        df = df[(df['Timestamp'].dt.date >= start_date) & (df['Timestamp'].dt.date <= end_date)]
-
-        # Temperature plot
-        st.header('Temperature Data')
-        df['DeviceName'] = df['Device'].map(DEVICE_LABELS).fillna(df['Device'])
-        df_t = df.melt(
-            id_vars=['Timestamp','DeviceName','Interpolated'],
-            value_vars=['Temp_F'], var_name='Metric'
-        )
-        line_temp = alt.Chart(df_t).mark_line().encode(
+# --- Tab 2: Interactive Time Series & Trends ---
+with tabs[1]:
+    st.subheader('Time Series')
+    # Generic plot function
+    def plot_timeseries(df, metric, threshold=None):
+        y_field = {
+            'Temperature':'Temp_F',
+            'RH':'RH',
+            'Dew Point':'Dew_Point'
+        }[metric]
+        chart = alt.Chart(df).mark_line().encode(
             x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
-            y=alt.Y('value:Q', title='Temperature (°F)'), color='DeviceName:N'
+            y=alt.Y(f'{y_field}:Q', title=f'{metric}') ,
+            color='DeviceName:N'
         )
-        pts_temp = alt.Chart(df_t[df_t['Interpolated']]).mark_circle(size=50, color='red').encode(
-            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
-            y='value:Q'
-        )
-        st.altair_chart(line_temp + pts_temp, use_container_width=True)
+        # threshold bands
+        if threshold:
+            low, high = threshold
+            band = alt.Chart(df).mark_rect(opacity=0.1).encode(
+                x='Timestamp:T', x2='Timestamp:T',
+                y=alt.value(low), y2=alt.value(high)
+            )
+            return band + chart
+        return chart
 
-        # Relative Humidity plot
-        st.header('Relative Humidity Data')
-        df_r = df.melt(id_vars=['Timestamp','DeviceName','Interpolated'], value_vars=['RH'], var_name='Metric')
-        line_rh = alt.Chart(df_r).mark_line().encode(
-            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
-            y=alt.Y('value:Q', title='Relative Humidity (%)'), color='DeviceName:N'
-        )
-        pts_rh = alt.Chart(df_r[df_r['Interpolated']]).mark_circle(size=50, color='red').encode(
-            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
-            y='value:Q'
-        )
-        st.altair_chart(line_rh + pts_rh, use_container_width=True)
+    for m in metrics:
+        thr = None
+        if m=='Temperature': thr=(temp_min,temp_max)
+        if m=='RH': thr=(rh_min,rh_max)
+        st.altair_chart(plot_timeseries(df, m, thr), use_container_width=True)
+    # Daily aggregates
+    daily = df.set_index('Timestamp').groupby([pd.Grouper(freq='D'))]['Temp_F','RH'].agg(['min','max','mean'])
+    st.line_chart(daily)
 
-        # Correlation matrices
-        st.header('Correlation Matrix (Temperature)')
-        corr_t = compute_correlations(df, field='Temp_F')
-        df_ct = (
-            corr_t.reset_index().rename(columns={'index':'DeviceName'})
-            .melt(id_vars='DeviceName', var_name='DeviceName2', value_name='Corr')
-        )
-        heat_t = alt.Chart(df_ct).mark_rect().encode(
-            x='DeviceName2:O', y='DeviceName:O', color='Corr:Q'
-        ).properties(width=400, height=400)
-        st.altair_chart(heat_t, use_container_width=False)
+# --- Tab 3: Diagnostics ---
+with tabs[2]:
+    st.subheader('Calendar Heatmap')
+    cal = make_calendar_pivot(df, 'Temp_F')
+    heat = alt.Chart(cal).mark_rect().encode(
+        x='hour:O', y='date:O', color='Temp_F:Q'
+    ).properties(height=300)
+    st.altair_chart(heat, use_container_width=True)
 
-        st.header('Correlation Matrix (Relative Humidity)')
-        corr_h = compute_correlations(df, field='RH')
-        df_ch = (
-            corr_h.reset_index().rename(columns={'index':'DeviceName'})
-            .melt(id_vars='DeviceName', var_name='DeviceName2', value_name='Corr')
-        )
-        heat_h = alt.Chart(df_ch).mark_rect().encode(
-            x='DeviceName2:O', y='DeviceName:O', color='Corr:Q'
-        ).properties(width=400, height=400)
-        st.altair_chart(heat_h, use_container_width=False)
+    st.subheader('Zone Averages ± Std Dev')
+    grp = compute_group_means(df)
+    band = alt.Chart(grp).mark_errorband().encode(
+        x='Timestamp:T', y='Temp_F:Q', color='Zone:N'
+    )
+    line = alt.Chart(grp).mark_line().encode(
+        x='Timestamp:T', y='Temp_F:Q', color='Zone:N'
+    )
+    st.altair_chart(band+line, use_container_width=True)
 
-        # Show normalized charts only if the Outdoor Reference checkbox is checked
-        #if 'Outdoor Reference' in selected:
-        # Normalized Temperature Difference plot
-        st.header('Normalized Temperature Difference')
-        df_out = df[df['Device']=='AS10'][['Timestamp','Temp_F','RH']].rename(columns={'Temp_F':'T_out','RH':'RH_out'})
-        df_norm = df.merge(df_out, on='Timestamp')
-        df_norm['DeviceName'] = df_norm['Device'].map(DEVICE_LABELS).fillna(df_norm['Device'])
-        df_norm['Norm_T']  = df_norm['Temp_F'] - df_norm['T_out']
-        chart_norm_t = alt.Chart(df_norm).mark_line().encode(
-            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
-            y=alt.Y('Norm_T:Q', title='Temp Difference (°F)'), color='DeviceName:N'
-        )
-        st.altair_chart(chart_norm_t, use_container_width=True)
-        
-        # Normalized Relative Humidity Difference plot
-        st.header('Normalized Relative Humidity Difference')
-        df_norm['Norm_RH'] = df_norm['RH'] - df_norm['RH_out']
-        chart_norm_rh = alt.Chart(df_norm).mark_line().encode(
-            x=alt.X('Timestamp:T', axis=alt.Axis(format='%m/%d')),
-            y=alt.Y('Norm_RH:Q', title='RH Difference (%)'), color='DeviceName:N'
-        )
-        st.altair_chart(chart_norm_rh, use_container_width=True)         
-        
-        # Corr vs AS10 tables
-        st.header('Pearson Corr vs Outdoor Reference (Temp)')
-        cvt = compute_correlations(df, field='Temp_F')['Outdoor Reference']
-        st.table(cvt.reset_index().rename(columns={'index':'DeviceName','Outdoor-Reference':'Corr'}))
-        
-        st.header('Pearson Corr vs Outdoor Reference (RH)')
-        cvr = compute_correlations(df, field='RH')['Outdoor Reference']
-        st.table(cvr.reset_index().rename(columns={'index':'DeviceName','Outdoor-Reference':'Corr'}))
-
-        #else:
-            #st.warning("Outdoor Reference must be selected to calculate Normalized Data")
-
-        # Summary Stats
-        st.header('Summary Statistics (Temperature)')
-        st.dataframe(compute_summary_stats(df, field='Temp_F'))
-        st.header('Summary Statistics (Relative Humidity)')
-        st.dataframe(compute_summary_stats(df, field='RH'))
-else:
-    st.info("Use 'Load Data' then 'Analyze' to run the full analysis.")
+    st.subheader('Boxplots & Histograms')
+    box = alt.Chart(df).mark_boxplot().encode(
+        x='DeviceName:N', y='Temp_F:Q'
+    ).properties(height=200)
+    hist = alt.Chart(df).mark_bar().encode(
+        x=alt.X('Temp_F:Q', bin=True), y='count()'
+    ).properties(height=200)
+    st.altair_chart(box, use_container_width=True)
+    st.altair_chart(hist, use_container_width=True)
